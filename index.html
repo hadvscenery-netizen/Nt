@@ -2,15 +2,23 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ใบสั่งซื้อสินค้า | THE SCENERY VINTAGE FARM</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#2f2f2f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="PO Scenery">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f0f1f3;font-family:Segoe UI,Tahoma,sans-serif;color:#222}
 .page{max-width:1800px;margin:32px auto;background:#fff;padding:32px 36px;border-radius:16px}
-.header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #d6d9de;padding-bottom:16px}
+.header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #d6d9de;padding-bottom:16px;flex-wrap:wrap;gap:12px}
 .header-left h1{margin:0;font-size:28px}
 .header-left h2{margin:4px 0 0;font-size:16px;color:#666}
-.header-right{display:flex;gap:20px}
+.header-right{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 label{font-size:12px;font-weight:600;color:#555}
 input,textarea{width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:8px;font-size:12px}
 textarea{resize:vertical}
@@ -21,7 +29,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .btn{padding:8px 18px;border-radius:12px;font-weight:600;border:none;cursor:pointer}
 .btn.add{background:#e6e8ec}
 .btn-del{background:#fee2e2;border:none;border-radius:8px;padding:4px 8px;cursor:pointer}
-.actions{margin-top:20px;display:flex;justify-content:space-between;align-items:center;gap:16px}
+.actions{margin-top:20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .img-box{width:130px;height:130px;border:2px dashed #94a3b8;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;background:#fff}
 .img-box img{width:100%;height:100%;object-fit:cover}
 .img-hint{font-size:11px;color:#64748b;text-align:center}
@@ -36,6 +44,10 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .vendor-link-btn{display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border-radius:7px;background:#dbeafe;border:none;cursor:pointer;font-size:13px;text-decoration:none;color:#1d4ed8;white-space:nowrap;flex-shrink:0}
 .vendor-link-btn:hover{background:#bfdbfe}
 
+/* install button */
+#installBtn{display:none;padding:8px 18px;border-radius:12px;font-weight:600;border:none;cursor:pointer;background:#2f2f2f;color:#fff;gap:6px;align-items:center}
+#installBtn.visible{display:inline-flex}
+
 /* popup */
 .popup-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:3000}
 .popup{background:#fff;border-radius:18px;padding:24px;width:380px;text-align:center;transform:translateY(20px) scale(.95);opacity:0;transition:.25s ease}
@@ -46,7 +58,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .popup .ghost{background:#e5e7eb}
 .popup-input{width:100%;margin-top:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;font-size:13px;text-align:left}
 
-@media print{button,.btn-del{display:none!important}}
+@media print{button,.btn-del,#installBtn{display:none!important}}
 </style>
 </head>
 <body>
@@ -60,6 +72,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
     <div class="header-right">
       <div><label>เดือน</label><input type="month" id="monthPicker"></div>
       <div><label>แผนก</label><input type="text" id="deptInput"></div>
+      <button id="installBtn" title="ติดตั้งแอปลงเครื่อง">📲 ติดตั้งแอป</button>
     </div>
   </div>
 
@@ -100,6 +113,39 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 </div>
 
 <script>
+/* ── PWA: Service Worker ── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+/* ── PWA: Install button ── */
+let deferredPrompt = null;
+const installBtn = document.getElementById('installBtn');
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.classList.add('visible');
+});
+
+installBtn.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') {
+    installBtn.classList.remove('visible');
+  }
+  deferredPrompt = null;
+});
+
+window.addEventListener('appinstalled', () => {
+  installBtn.classList.remove('visible');
+  deferredPrompt = null;
+});
+
+/* ── Popup ── */
 const popup = document.getElementById('popup');
 const popupBox = document.getElementById('popupBox');
 
@@ -126,7 +172,7 @@ function closePopup() {
   setTimeout(() => popup.style.display = 'none', 200);
 }
 
-/* IndexedDB */
+/* ── IndexedDB ── */
 let dbReady = false, db;
 const dbReq = indexedDB.open('PO_IMAGES', 1);
 dbReq.onupgradeneeded = e => { db = e.target.result; db.createObjectStore('images', { keyPath: 'id' }); };
@@ -183,13 +229,9 @@ function bindRow(m, s) {
   [...m.querySelectorAll('input,textarea'), ...s.querySelectorAll('textarea')]
     .forEach(e => e.oninput = () => { calcAll(); saveMonth(); });
 
-  /* sync vendor url → link button */
   const urlInput = m.querySelector('.vendor-url');
   const linkBtn = m.querySelector('.vendor-link-btn');
-  urlInput.addEventListener('input', () => {
-    const v = urlInput.value.trim();
-    linkBtn.href = v || '#';
-  });
+  urlInput.addEventListener('input', () => { linkBtn.href = urlInput.value.trim() || '#'; });
   linkBtn.addEventListener('click', e => {
     if (!urlInput.value.trim()) { e.preventDefault(); showPopup({ title: 'ยังไม่ได้ใส่ลิงก์' }); }
   });
@@ -216,7 +258,7 @@ function bindRow(m, s) {
   if (dbReady) {
     db.transaction('images', 'readonly').objectStore('images').get(rowId).onsuccess = e => {
       if (e.target.result) {
-        let img = document.createElement('img'); img.src = e.target.result.data;
+        const img = document.createElement('img'); img.src = e.target.result.data;
         box.innerHTML = ''; box.appendChild(img); box.appendChild(input);
       }
     };
@@ -226,12 +268,7 @@ function bindRow(m, s) {
     showPopup({
       title: 'ยืนยันการลบ', actions: [
         { label: 'ยกเลิก' },
-        {
-          label: 'ลบ', type: 'danger', onClick: () => {
-            m.nextSibling.remove(); m.remove();
-            renumber(); calcAll(); saveMonth();
-          }
-        }
+        { label: 'ลบ', type: 'danger', onClick: () => { m.nextSibling.remove(); m.remove(); renumber(); calcAll(); saveMonth(); } }
       ]
     });
   };
@@ -310,12 +347,10 @@ document.getElementById('importFile').onchange = e => {
   r.readAsText(f);
 };
 
-/* ── Export HTML with clickable links ── */
+/* ── Export HTML ── */
 function exportHTML() {
   if (!monthPicker.value) { showPopup({ title: 'กรุณาเลือกเดือน' }); return; }
-
   const defaultName = 'PO_' + monthPicker.value + (deptInput.value ? '_' + deptInput.value : '');
-
   showPopup({
     title: 'ตั้งชื่อไฟล์',
     msg: 'ชื่อไฟล์ที่จะบันทึก (.html จะเพิ่มให้อัตโนมัติ)',
@@ -324,18 +359,13 @@ function exportHTML() {
       { label: 'ยกเลิก' },
       {
         label: 'ดาวน์โหลด', type: 'primary', onClick: () => {
-          const fname = (document.getElementById('filenameInput')?.value?.trim() || defaultName)
-            .replace(/\.html$/i, '');
+          const fname = (document.getElementById('filenameInput')?.value?.trim() || defaultName).replace(/\.html$/i, '');
           doExportHTML(fname);
         }
       }
     ]
   });
-
-  setTimeout(() => {
-    const inp = document.getElementById('filenameInput');
-    if (inp) { inp.focus(); inp.select(); }
-  }, 50);
+  setTimeout(() => { const inp = document.getElementById('filenameInput'); if (inp) { inp.focus(); inp.select(); } }, 50);
 }
 
 function doExportHTML(filename) {
@@ -358,16 +388,10 @@ function doExportHTML(filename) {
       const imgTag = imgMap[r.id]
         ? `<img src="${imgMap[r.id]}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">`
         : `<div style="width:80px;height:80px;border:1px dashed #94a3b8;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#94a3b8;">ไม่มีรูป</div>`;
-
       let vendorHtml = '';
-      if (r.vendor && r.vendorUrl) {
-        vendorHtml = `<a href="${r.vendorUrl}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">${r.vendor}</a>`;
-      } else if (r.vendor) {
-        vendorHtml = `<span>${r.vendor}</span>`;
-      } else if (r.vendorUrl) {
-        vendorHtml = `<a href="${r.vendorUrl}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">${r.vendorUrl}</a>`;
-      }
-
+      if (r.vendor && r.vendorUrl) vendorHtml = `<a href="${r.vendorUrl}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">${r.vendor}</a>`;
+      else if (r.vendor) vendorHtml = `<span>${r.vendor}</span>`;
+      else if (r.vendorUrl) vendorHtml = `<a href="${r.vendorUrl}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">${r.vendorUrl}</a>`;
       return `
       <tr>
         <td style="text-align:center">${idx + 1}</td>
@@ -390,13 +414,10 @@ function doExportHTML(filename) {
     }).join('');
 
     const html = `<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="UTF-8">
+<html lang="th"><head><meta charset="UTF-8">
 <title>ใบสั่งซื้อสินค้า ${monthPicker.value}</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;font-family:Segoe UI,Tahoma,sans-serif;color:#222;background:#f0f1f3}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Tahoma,sans-serif;color:#222;background:#f0f1f3}
 .page{max-width:1400px;margin:32px auto;background:#fff;padding:32px 36px;border-radius:16px}
 h1{margin:0;font-size:26px}h2{margin:4px 0 0;font-size:15px;color:#666}
 .meta{font-size:13px;margin-top:8px;color:#444}
@@ -406,35 +427,23 @@ td{padding:6px 8px;border-bottom:1px solid #e5e7eb;vertical-align:middle}
 .total{text-align:right;margin-top:16px;font-size:16px;font-weight:700}
 a{color:#1d4ed8}
 @media print{body{background:#fff}.page{margin:0;border-radius:0;padding:20px}}
-</style>
-</head>
-<body>
+</style></head><body>
 <div class="page">
-  <h1>ใบสั่งซื้อสินค้า</h1>
-  <h2>THE SCENERY VINTAGE FARM</h2>
+  <h1>ใบสั่งซื้อสินค้า</h1><h2>THE SCENERY VINTAGE FARM</h2>
   <div class="meta">เดือน: ${monthPicker.value} &nbsp;|&nbsp; แผนก: ${deptInput.value || '-'}</div>
   <table>
-    <thead>
-      <tr>
-        <th>#</th><th>รายละเอียด</th><th>รูป</th><th>หน่วย</th>
-        <th>สต็อก</th><th>คงเหลือ</th><th>ซื้อเพิ่ม</th>
-        <th>ราคา</th><th>รวม</th><th>ร้าน / ลิงก์</th>
-      </tr>
-    </thead>
+    <thead><tr><th>#</th><th>รายละเอียด</th><th>รูป</th><th>หน่วย</th><th>สต็อก</th><th>คงเหลือ</th><th>ซื้อเพิ่ม</th><th>ราคา</th><th>รวม</th><th>ร้าน / ลิงก์</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
   </table>
   <div class="total">รวมทั้งหมด: ${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</div>
-</div>
-</body>
-</html>`;
+</div></body></html>`;
 
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename + '.html';
     a.click();
-
-    showPopup({ title: 'ส่งออกสำเร็จ ✅', msg: 'เปิดไฟล์ .html ด้วย browser แล้วกดลิงก์ร้านได้เลย หรือสั่งพิมพ์เป็น PDF จาก browser' });
+    showPopup({ title: 'ส่งออกสำเร็จ ✅', msg: 'เปิดไฟล์ .html ด้วย browser กดลิงก์ร้านได้เลย หรือสั่งพิมพ์เป็น PDF จาก browser' });
   });
 }
 </script>
