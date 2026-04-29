@@ -38,12 +38,13 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 
 /* popup */
 .popup-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:3000}
-.popup{background:#fff;border-radius:18px;padding:24px;width:360px;text-align:center;transform:translateY(20px) scale(.95);opacity:0;transition:.25s ease}
+.popup{background:#fff;border-radius:18px;padding:24px;width:380px;text-align:center;transform:translateY(20px) scale(.95);opacity:0;transition:.25s ease}
 .popup.show{transform:none;opacity:1}
 .popup-actions{display:flex;gap:10px;justify-content:center;margin-top:18px}
 .popup .danger{background:#dc2626;color:#fff}
 .popup .primary{background:#2563eb;color:#fff}
 .popup .ghost{background:#e5e7eb}
+.popup-input{width:100%;margin-top:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:10px;font-size:13px;text-align:left}
 
 @media print{button,.btn-del{display:none!important}}
 </style>
@@ -93,6 +94,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
   <div class="popup" id="popupBox">
     <h3 id="popupTitle"></h3>
     <p id="popupMsg"></p>
+    <div id="popupExtra"></div>
     <div class="popup-actions" id="popupActions"></div>
   </div>
 </div>
@@ -104,9 +106,10 @@ const popupBox = document.getElementById('popupBox');
 popup.addEventListener('click', e => { if (e.target === popup) closePopup(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopup(); });
 
-function showPopup({ title, msg, actions = [] }) {
+function showPopup({ title, msg, extra = '', actions = [] }) {
   popupTitle.innerText = title;
   popupMsg.innerText = msg || '';
+  document.getElementById('popupExtra').innerHTML = extra;
   popupActions.innerHTML = '';
   actions.forEach(a => {
     const b = document.createElement('button');
@@ -311,6 +314,31 @@ document.getElementById('importFile').onchange = e => {
 function exportHTML() {
   if (!monthPicker.value) { showPopup({ title: 'กรุณาเลือกเดือน' }); return; }
 
+  const defaultName = 'PO_' + monthPicker.value + (deptInput.value ? '_' + deptInput.value : '');
+
+  showPopup({
+    title: 'ตั้งชื่อไฟล์',
+    msg: 'ชื่อไฟล์ที่จะบันทึก (.html จะเพิ่มให้อัตโนมัติ)',
+    extra: `<input class="popup-input" id="filenameInput" value="${defaultName}" placeholder="ชื่อไฟล์">`,
+    actions: [
+      { label: 'ยกเลิก' },
+      {
+        label: 'ดาวน์โหลด', type: 'primary', onClick: () => {
+          const fname = (document.getElementById('filenameInput')?.value?.trim() || defaultName)
+            .replace(/\.html$/i, '');
+          doExportHTML(fname);
+        }
+      }
+    ]
+  });
+
+  setTimeout(() => {
+    const inp = document.getElementById('filenameInput');
+    if (inp) { inp.focus(); inp.select(); }
+  }, 50);
+}
+
+function doExportHTML(filename) {
   const rows = getRows();
   const imagePromises = rows.map(row => new Promise(res => {
     if (!dbReady) { res({ id: row.id, data: null }); return; }
@@ -403,10 +431,10 @@ a{color:#1d4ed8}
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'PO_' + monthPicker.value + '.html';
+    a.download = filename + '.html';
     a.click();
 
-    showPopup({ title: 'ส่งออกสำเร็จ', msg: 'เปิดไฟล์ .html ด้วย browser แล้วกดลิงก์ร้านได้เลย หรือสั่งพิมพ์เป็น PDF จาก browser' });
+    showPopup({ title: 'ส่งออกสำเร็จ ✅', msg: 'เปิดไฟล์ .html ด้วย browser แล้วกดลิงก์ร้านได้เลย หรือสั่งพิมพ์เป็น PDF จาก browser' });
   });
 }
 </script>
