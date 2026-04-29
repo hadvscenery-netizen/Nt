@@ -3,10 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>ใบสั่งซื้อสินค้า | THE SCENERY VINTAGE FARM</title>
-
-<link rel="manifest" href="/TRO/manifest.json">
-<meta name="theme-color" content="#111111">
-
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f0f1f3;font-family:Segoe UI,Tahoma,sans-serif;color:#222}
@@ -32,27 +28,24 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 .sub-row td{background:#f9fafb}
 .sub-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 
+/* vendor cell */
+.vendor-cell{display:flex;flex-direction:column;gap:4px}
+.vendor-cell input{width:100%}
+.vendor-link-row{display:flex;align-items:center;gap:4px}
+.vendor-link-row input{flex:1}
+.vendor-link-btn{display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border-radius:7px;background:#dbeafe;border:none;cursor:pointer;font-size:13px;text-decoration:none;color:#1d4ed8;white-space:nowrap;flex-shrink:0}
+.vendor-link-btn:hover{background:#bfdbfe}
+
 /* popup */
-.popup-backdrop{
-  position:fixed;inset:0;
-  background:rgba(0,0,0,.45);
-  backdrop-filter:blur(2px);
-  display:none;align-items:center;justify-content:center;
-  z-index:3000;
-}
-.popup{
-  background:#fff;border-radius:18px;
-  padding:24px;width:360px;text-align:center;
-  transform:translateY(20px) scale(.95);
-  opacity:0;transition:.25s ease;
-}
+.popup-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:3000}
+.popup{background:#fff;border-radius:18px;padding:24px;width:360px;text-align:center;transform:translateY(20px) scale(.95);opacity:0;transition:.25s ease}
 .popup.show{transform:none;opacity:1}
 .popup-actions{display:flex;gap:10px;justify-content:center;margin-top:18px}
 .popup .danger{background:#dc2626;color:#fff}
 .popup .primary{background:#2563eb;color:#fff}
 .popup .ghost{background:#e5e7eb}
 
-@media print{button,.btn-del,#installBtn{display:none!important}}
+@media print{button,.btn-del{display:none!important}}
 </style>
 </head>
 <body>
@@ -75,7 +68,7 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
         <tr>
           <th>#</th><th>รายละเอียด</th><th>รูป</th><th>หน่วย</th>
           <th>สต็อก</th><th>คงเหลือ</th><th>ซื้อเพิ่ม</th>
-          <th>ราคา</th><th>รวม</th><th>ร้าน</th><th>ลบ</th>
+          <th>ราคา</th><th>รวม</th><th>ร้าน / ลิงก์</th><th>ลบ</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -85,10 +78,11 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 
   <div class="actions">
     <strong>รวม <span id="grand">0.00</span> บาท</strong>
-    <div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn add" onclick="exportData()">💾 เซฟข้อมูล</button>
       <button class="btn add" onclick="importData()">📂 กู้ข้อมูล</button>
       <input type="file" id="importFile" accept=".json" hidden>
+      <button class="btn" onclick="exportHTML()">📄 ส่งออก HTML (กดลิงก์ได้)</button>
       <button class="btn" onclick="window.print()">🖨 พิมพ์ / Save PDF</button>
     </div>
   </div>
@@ -104,226 +98,317 @@ td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top}
 </div>
 
 <script>
-const popup=document.getElementById('popup');
-const popupBox=document.getElementById('popupBox');
+const popup = document.getElementById('popup');
+const popupBox = document.getElementById('popupBox');
 
-popup.addEventListener('click',e=>{
-  if(e.target===popup) closePopup();
-});
+popup.addEventListener('click', e => { if (e.target === popup) closePopup(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopup(); });
 
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape') closePopup();
-});
-
-function showPopup({title,msg,actions=[]}){
-  popupTitle.innerText=title;
-  popupMsg.innerText=msg||'';
-  popupActions.innerHTML='';
-  actions.forEach(a=>{
-    const b=document.createElement('button');
-    b.className='btn '+(a.type||'ghost');
-    b.innerText=a.label;
-    b.onclick=()=>{closePopup();a.onClick&&a.onClick()};
+function showPopup({ title, msg, actions = [] }) {
+  popupTitle.innerText = title;
+  popupMsg.innerText = msg || '';
+  popupActions.innerHTML = '';
+  actions.forEach(a => {
+    const b = document.createElement('button');
+    b.className = 'btn ' + (a.type || 'ghost');
+    b.innerText = a.label;
+    b.onclick = () => { closePopup(); a.onClick && a.onClick(); };
     popupActions.appendChild(b);
   });
-  popup.style.display='flex';
-  requestAnimationFrame(()=>popupBox.classList.add('show'));
+  popup.style.display = 'flex';
+  requestAnimationFrame(() => popupBox.classList.add('show'));
 }
-function closePopup(){
+function closePopup() {
   popupBox.classList.remove('show');
-  setTimeout(()=>popup.style.display='none',200);
+  setTimeout(() => popup.style.display = 'none', 200);
 }
 
 /* IndexedDB */
-let dbReady=false, db;
-const dbReq=indexedDB.open('PO_IMAGES',1);
-dbReq.onupgradeneeded=e=>{
-  db=e.target.result;
-  db.createObjectStore('images',{keyPath:'id'});
-};
-dbReq.onsuccess=e=>{
-  db=e.target.result;
-  dbReady=true;
-};
+let dbReady = false, db;
+const dbReq = indexedDB.open('PO_IMAGES', 1);
+dbReq.onupgradeneeded = e => { db = e.target.result; db.createObjectStore('images', { keyPath: 'id' }); };
+dbReq.onsuccess = e => { db = e.target.result; dbReady = true; };
 
-/* logic */
-const monthPicker=document.getElementById('monthPicker');
-const deptInput=document.getElementById('deptInput');
-const tbody=document.getElementById('tbody');
-const addBtn=document.getElementById('addBtn');
+const monthPicker = document.getElementById('monthPicker');
+const deptInput = document.getElementById('deptInput');
+const tbody = document.getElementById('tbody');
+const addBtn = document.getElementById('addBtn');
 
-addBtn.onclick=()=>{
-  if(!monthPicker.value){
-    showPopup({title:'กรุณาเลือกเดือน'});
-    return;
-  }
+addBtn.onclick = () => {
+  if (!monthPicker.value) { showPopup({ title: 'กรุณาเลือกเดือน' }); return; }
   addRow();
 };
 
-function addRow(d={}){
-  const rowId=d.id||crypto.randomUUID();
-  const m=document.createElement('tr');
-  const s=document.createElement('tr'); s.className='sub-row';
-  m.dataset.id=rowId;
+function addRow(d = {}) {
+  const rowId = d.id || crypto.randomUUID();
+  const m = document.createElement('tr');
+  const s = document.createElement('tr'); s.className = 'sub-row';
+  m.dataset.id = rowId;
 
-  m.innerHTML=`
+  m.innerHTML = `
     <td class="no"></td>
-    <td><textarea>${d.desc||''}</textarea></td>
+    <td><textarea>${d.desc || ''}</textarea></td>
     <td><div class="img-box"><span class="img-hint">แนบรูป</span><input type="file" hidden></div></td>
-    <td><input value="${d.unit||''}"></td>
-    <td><input type="number" value="${d.stock||''}"></td>
-    <td><input value="${d.remain||''}"></td>
-    <td><input type="number" class="buy" value="${d.buy||0}"></td>
-    <td><input type="number" class="price" value="${d.price||0}"></td>
+    <td><input value="${d.unit || ''}"></td>
+    <td><input type="number" value="${d.stock || ''}"></td>
+    <td><input value="${d.remain || ''}"></td>
+    <td><input type="number" class="buy" value="${d.buy || 0}"></td>
+    <td><input type="number" class="price" value="${d.price || 0}"></td>
     <td class="sum">0.00</td>
-    <td><input value="${d.vendor||''}"></td>
+    <td>
+      <div class="vendor-cell">
+        <input class="vendor-name" placeholder="ชื่อร้าน" value="${d.vendor || ''}">
+        <div class="vendor-link-row">
+          <input class="vendor-url" placeholder="https://..." value="${d.vendorUrl || ''}">
+          <a class="vendor-link-btn" href="${d.vendorUrl || '#'}" target="_blank" title="เปิดลิงก์">🔗</a>
+        </div>
+      </div>
+    </td>
     <td><button class="btn-del">🗑</button></td>`;
 
-  s.innerHTML=`<td colspan="11"><div class="sub-grid">
-  <div><label>จุดประสงค์</label><textarea>${d.purpose||''}</textarea></div>
-  <div><label>สถานที่ใช้งาน</label><textarea>${d.location||''}</textarea></div>
+  s.innerHTML = `<td colspan="11"><div class="sub-grid">
+    <div><label>จุดประสงค์</label><textarea>${d.purpose || ''}</textarea></div>
+    <div><label>สถานที่ใช้งาน</label><textarea>${d.location || ''}</textarea></div>
   </div></td>`;
 
-  tbody.append(m,s);
-  bindRow(m,s);
+  tbody.append(m, s);
+  bindRow(m, s);
   renumber(); calcAll(); saveMonth();
 }
 
-function bindRow(m,s){
-  [...m.querySelectorAll('input,textarea'),...s.querySelectorAll('textarea')]
-    .forEach(e=>e.oninput=()=>{calcAll();saveMonth();});
+function bindRow(m, s) {
+  [...m.querySelectorAll('input,textarea'), ...s.querySelectorAll('textarea')]
+    .forEach(e => e.oninput = () => { calcAll(); saveMonth(); });
 
-  const rowId=m.dataset.id;
-  const box=m.querySelector('.img-box');
-  const input=box.querySelector('input');
+  /* sync vendor url → link button */
+  const urlInput = m.querySelector('.vendor-url');
+  const linkBtn = m.querySelector('.vendor-link-btn');
+  urlInput.addEventListener('input', () => {
+    const v = urlInput.value.trim();
+    linkBtn.href = v || '#';
+  });
+  linkBtn.addEventListener('click', e => {
+    if (!urlInput.value.trim()) { e.preventDefault(); showPopup({ title: 'ยังไม่ได้ใส่ลิงก์' }); }
+  });
 
-  box.onclick=()=>input.click();
+  const rowId = m.dataset.id;
+  const box = m.querySelector('.img-box');
+  const input = box.querySelector('input');
 
-  input.onchange=()=>{
-    if(!dbReady) return;
-    const f=input.files[0];
-    if(!f) return;
+  box.onclick = e => { if (e.target !== input) input.click(); };
 
-    const r=new FileReader();
-    r.onload=()=>{
-      db.transaction('images','readwrite')
-        .objectStore('images')
-        .put({id:rowId,data:r.result});
-
+  input.onchange = () => {
+    if (!dbReady) return;
+    const f = input.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      db.transaction('images', 'readwrite').objectStore('images').put({ id: rowId, data: r.result });
       let img = box.querySelector('img');
-
-      if(!img){
-        img = document.createElement('img');
-        box.innerHTML='';
-        box.appendChild(img);
-        box.appendChild(input);
-      }
-
+      if (!img) { img = document.createElement('img'); box.innerHTML = ''; box.appendChild(img); box.appendChild(input); }
       img.src = r.result;
     };
     r.readAsDataURL(f);
   };
 
-  if(dbReady){
-    db.transaction('images','readonly')
-      .objectStore('images')
-      .get(rowId).onsuccess=e=>{
-        if(e.target.result){
-          let img = document.createElement('img');
-          img.src = e.target.result.data;
-          box.innerHTML='';
-          box.appendChild(img);
-          box.appendChild(input);
-        }
-      };
+  if (dbReady) {
+    db.transaction('images', 'readonly').objectStore('images').get(rowId).onsuccess = e => {
+      if (e.target.result) {
+        let img = document.createElement('img'); img.src = e.target.result.data;
+        box.innerHTML = ''; box.appendChild(img); box.appendChild(input);
+      }
+    };
   }
 
-  m.querySelector('.btn-del').onclick=()=>{
+  m.querySelector('.btn-del').onclick = () => {
     showPopup({
-      title:'ยืนยันการลบ',
-      actions:[
-        {label:'ยกเลิก'},
-        {label:'ลบ',type:'danger',onClick:()=>{
-          m.nextSibling.remove(); m.remove();
-          renumber(); calcAll(); saveMonth();
-        }}
+      title: 'ยืนยันการลบ', actions: [
+        { label: 'ยกเลิก' },
+        {
+          label: 'ลบ', type: 'danger', onClick: () => {
+            m.nextSibling.remove(); m.remove();
+            renumber(); calcAll(); saveMonth();
+          }
+        }
       ]
     });
   };
 }
 
-function renumber(){let i=1;tbody.querySelectorAll('.no').forEach(n=>n.innerText=i++)}
-function calcAll(){
-  let g=0;
-  tbody.querySelectorAll('.buy').forEach(b=>{
-    const tr=b.closest('tr');
-    const s=(b.value*tr.querySelector('.price').value||0).toFixed(2);
-    tr.querySelector('.sum').innerText=s;
-    g+=+s;
+function renumber() { let i = 1; tbody.querySelectorAll('.no').forEach(n => n.innerText = i++); }
+
+function calcAll() {
+  let g = 0;
+  tbody.querySelectorAll('.buy').forEach(b => {
+    const tr = b.closest('tr');
+    const s = ((b.value * tr.querySelector('.price').value) || 0).toFixed(2);
+    tr.querySelector('.sum').innerText = s;
+    g += +s;
   });
-  grand.innerText=g.toFixed(2);
+  grand.innerText = g.toFixed(2);
 }
 
-function saveMonth(){
-  if(!monthPicker.value) return;
-  const rows=[];
-  const trs=[...tbody.children];
-  for(let i=0;i<trs.length;i+=2){
-    const m=trs[i], s=trs[i+1];
+function getRows() {
+  const rows = [];
+  const trs = [...tbody.children];
+  for (let i = 0; i < trs.length; i += 2) {
+    const m = trs[i], s = trs[i + 1];
     rows.push({
-      id:m.dataset.id,
-      desc:m.children[1].querySelector('textarea').value,
-      unit:m.children[3].querySelector('input').value,
-      stock:m.children[4].querySelector('input').value,
-      remain:m.children[5].querySelector('input').value,
-      buy:m.children[6].querySelector('input').value,
-      price:m.children[7].querySelector('input').value,
-      vendor:m.children[9].querySelector('input').value,
-      purpose:s.querySelectorAll('textarea')[0].value,
-      location:s.querySelectorAll('textarea')[1].value
+      id: m.dataset.id,
+      desc: m.children[1].querySelector('textarea').value,
+      unit: m.children[3].querySelector('input').value,
+      stock: m.children[4].querySelector('input').value,
+      remain: m.children[5].querySelector('input').value,
+      buy: m.children[6].querySelector('input').value,
+      price: m.children[7].querySelector('input').value,
+      vendor: m.querySelector('.vendor-name').value,
+      vendorUrl: m.querySelector('.vendor-url').value,
+      purpose: s.querySelectorAll('textarea')[0].value,
+      location: s.querySelectorAll('textarea')[1].value
     });
   }
-  localStorage.setItem('PO_'+monthPicker.value,JSON.stringify({dept:deptInput.value,rows}));
+  return rows;
 }
 
-function loadMonth(){
-  tbody.innerHTML='';
-  const r=localStorage.getItem('PO_'+monthPicker.value);
-  if(!r) return;
-  const d=JSON.parse(r);
-  deptInput.value=d.dept||'';
+function saveMonth() {
+  if (!monthPicker.value) return;
+  localStorage.setItem('PO_' + monthPicker.value, JSON.stringify({ dept: deptInput.value, rows: getRows() }));
+}
+
+function loadMonth() {
+  tbody.innerHTML = '';
+  const r = localStorage.getItem('PO_' + monthPicker.value);
+  if (!r) return;
+  const d = JSON.parse(r);
+  deptInput.value = d.dept || '';
   d.rows.forEach(addRow);
 }
 
-monthPicker.onchange=loadMonth;
+monthPicker.onchange = loadMonth;
 
-function exportData(){
-  const data=localStorage.getItem('PO_'+monthPicker.value);
-  if(!data){
-    showPopup({title:'ไม่มีข้อมูล'});
-    return;
-  }
-  const blob=new Blob([data],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='PO_'+monthPicker.value+'.json';
+function exportData() {
+  const data = localStorage.getItem('PO_' + monthPicker.value);
+  if (!data) { showPopup({ title: 'ไม่มีข้อมูล' }); return; }
+  const blob = new Blob([data], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'PO_' + monthPicker.value + '.json';
   a.click();
 }
 
-function importData(){
-  document.getElementById('importFile').click();
-}
-document.getElementById('importFile').onchange=e=>{
-  const f=e.target.files[0];
-  if(!f) return;
-  const r=new FileReader();
-  r.onload=()=>{
-    localStorage.setItem('PO_'+monthPicker.value,r.result);
+function importData() { document.getElementById('importFile').click(); }
+document.getElementById('importFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    localStorage.setItem('PO_' + monthPicker.value, r.result);
     loadMonth();
-    showPopup({title:'กู้ข้อมูลสำเร็จ'});
+    showPopup({ title: 'กู้ข้อมูลสำเร็จ' });
   };
   r.readAsText(f);
 };
+
+/* ── Export HTML with clickable links ── */
+function exportHTML() {
+  if (!monthPicker.value) { showPopup({ title: 'กรุณาเลือกเดือน' }); return; }
+
+  const rows = getRows();
+  const imagePromises = rows.map(row => new Promise(res => {
+    if (!dbReady) { res({ id: row.id, data: null }); return; }
+    const req = db.transaction('images', 'readonly').objectStore('images').get(row.id);
+    req.onsuccess = e => res({ id: row.id, data: e.target.result ? e.target.result.data : null });
+    req.onerror = () => res({ id: row.id, data: null });
+  }));
+
+  Promise.all(imagePromises).then(images => {
+    const imgMap = {};
+    images.forEach(i => imgMap[i.id] = i.data);
+
+    let total = 0;
+    const rowsHtml = rows.map((r, idx) => {
+      const sum = ((+r.buy || 0) * (+r.price || 0));
+      total += sum;
+      const imgTag = imgMap[r.id]
+        ? `<img src="${imgMap[r.id]}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">`
+        : `<div style="width:80px;height:80px;border:1px dashed #94a3b8;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#94a3b8;">ไม่มีรูป</div>`;
+
+      let vendorHtml = '';
+      if (r.vendor && r.vendorUrl) {
+        vendorHtml = `<a href="${r.vendorUrl}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">${r.vendor}</a>`;
+      } else if (r.vendor) {
+        vendorHtml = `<span>${r.vendor}</span>`;
+      } else if (r.vendorUrl) {
+        vendorHtml = `<a href="${r.vendorUrl}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">${r.vendorUrl}</a>`;
+      }
+
+      return `
+      <tr>
+        <td style="text-align:center">${idx + 1}</td>
+        <td>${(r.desc || '').replace(/\n/g, '<br>')}</td>
+        <td style="text-align:center">${imgTag}</td>
+        <td style="text-align:center">${r.unit || ''}</td>
+        <td style="text-align:center">${r.stock || ''}</td>
+        <td style="text-align:center">${r.remain || ''}</td>
+        <td style="text-align:center">${r.buy || 0}</td>
+        <td style="text-align:right">${(+r.price || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+        <td style="text-align:right">${sum.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+        <td>${vendorHtml}</td>
+      </tr>
+      <tr style="background:#f9fafb">
+        <td colspan="10" style="padding:6px 12px;font-size:11px;color:#555">
+          <b>จุดประสงค์:</b> ${(r.purpose || '').replace(/\n/g, ' ')} &nbsp;&nbsp;
+          <b>สถานที่ใช้งาน:</b> ${(r.location || '').replace(/\n/g, ' ')}
+        </td>
+      </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ใบสั่งซื้อสินค้า ${monthPicker.value}</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Tahoma,sans-serif;color:#222;background:#f0f1f3}
+.page{max-width:1400px;margin:32px auto;background:#fff;padding:32px 36px;border-radius:16px}
+h1{margin:0;font-size:26px}h2{margin:4px 0 0;font-size:15px;color:#666}
+.meta{font-size:13px;margin-top:8px;color:#444}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:20px}
+th{background:#2f2f2f;color:#fff;padding:8px;text-align:center}
+td{padding:6px 8px;border-bottom:1px solid #e5e7eb;vertical-align:middle}
+.total{text-align:right;margin-top:16px;font-size:16px;font-weight:700}
+a{color:#1d4ed8}
+@media print{body{background:#fff}.page{margin:0;border-radius:0;padding:20px}}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>ใบสั่งซื้อสินค้า</h1>
+  <h2>THE SCENERY VINTAGE FARM</h2>
+  <div class="meta">เดือน: ${monthPicker.value} &nbsp;|&nbsp; แผนก: ${deptInput.value || '-'}</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>รายละเอียด</th><th>รูป</th><th>หน่วย</th>
+        <th>สต็อก</th><th>คงเหลือ</th><th>ซื้อเพิ่ม</th>
+        <th>ราคา</th><th>รวม</th><th>ร้าน / ลิงก์</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+  <div class="total">รวมทั้งหมด: ${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</div>
+</div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'PO_' + monthPicker.value + '.html';
+    a.click();
+
+    showPopup({ title: 'ส่งออกสำเร็จ', msg: 'เปิดไฟล์ .html ด้วย browser แล้วกดลิงก์ร้านได้เลย หรือสั่งพิมพ์เป็น PDF จาก browser' });
+  });
+}
 </script>
 </body>
 </html>
