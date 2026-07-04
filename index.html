@@ -240,6 +240,27 @@ function uuid() {
   return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
 }
 
+/* ── remember textarea drag-resize height per field type (desc / purpose / location)
+   so the box doesn't reset to its default size every time the app is reopened ── */
+function getTaHeights() {
+  try { return JSON.parse(localStorage.getItem('PO_TA_HEIGHTS') || '{}'); }
+  catch { return {}; }
+}
+function setTaHeight(type, height) {
+  const h = getTaHeights();
+  h[type] = height;
+  localStorage.setItem('PO_TA_HEIGHTS', JSON.stringify(h));
+}
+function trackResize(el, type) {
+  if (!('ResizeObserver' in window)) return;
+  let initial = true;
+  const ro = new ResizeObserver(() => {
+    if (initial) { initial = false; return; } // skip the automatic first callback
+    setTaHeight(type, el.style.height || (el.offsetHeight + 'px'));
+  });
+  ro.observe(el);
+}
+
 function getIndex() {
   try { return JSON.parse(localStorage.getItem('PO_INDEX') || '{}'); }
   catch { return {}; }
@@ -304,7 +325,7 @@ function setUiForHasMonth(hasOrders) {
   }
 }
 
-monthPicker.onchange = () => {
+function handleMonthChange() {
   const month = monthPicker.value;
   if (!month) {
     currentOrderId = null;
@@ -320,7 +341,8 @@ monthPicker.onchange = () => {
     refreshOrderSelect(list[0].id);
     loadOrder(list[0].id);
   }
-};
+}
+monthPicker.onchange = handleMonthChange;
 
 orderSelect.onchange = () => { loadOrder(orderSelect.value); };
 
@@ -411,13 +433,17 @@ addBtn.onclick = () => {
 
 function addRow(d = {}) {
   const rowId = d.id || uuid();
+  const taH = getTaHeights();
+  const descStyle = taH.desc ? ` style="height:${taH.desc}"` : '';
+  const purposeStyle = taH.purpose ? ` style="height:${taH.purpose}"` : '';
+  const locationStyle = taH.location ? ` style="height:${taH.location}"` : '';
   const m = document.createElement('tr');
   const s = document.createElement('tr'); s.className = 'sub-row';
   m.dataset.id = rowId;
 
   m.innerHTML = `
     <td class="no"></td>
-    <td><textarea>${d.desc || ''}</textarea></td>
+    <td><textarea class="ta-desc"${descStyle}>${d.desc || ''}</textarea></td>
     <td><div class="img-box"><span class="img-hint">แนบรูป</span><input type="file" hidden></div></td>
     <td><input value="${d.unit || ''}"></td>
     <td><input type="number" value="${d.stock || ''}"></td>
@@ -437,8 +463,8 @@ function addRow(d = {}) {
     <td><button class="btn-del">🗑</button></td>`;
 
   s.innerHTML = `<td colspan="11"><div class="sub-grid">
-    <div><label>จุดประสงค์</label><textarea>${d.purpose || ''}</textarea></div>
-    <div><label>สถานที่ใช้งาน</label><textarea>${d.location || ''}</textarea></div>
+    <div><label>จุดประสงค์</label><textarea class="ta-purpose"${purposeStyle}>${d.purpose || ''}</textarea></div>
+    <div><label>สถานที่ใช้งาน</label><textarea class="ta-location"${locationStyle}>${d.location || ''}</textarea></div>
   </div></td>`;
 
   tbody.append(m, s);
@@ -449,6 +475,10 @@ function addRow(d = {}) {
 function bindRow(m, s) {
   [...m.querySelectorAll('input,textarea'), ...s.querySelectorAll('textarea')]
     .forEach(e => e.oninput = () => { calcAll(); saveMonth(); });
+
+  trackResize(m.querySelector('.ta-desc'), 'desc');
+  trackResize(s.querySelector('.ta-purpose'), 'purpose');
+  trackResize(s.querySelector('.ta-location'), 'location');
 
   const urlInput = m.querySelector('.vendor-url');
   const linkBtn = m.querySelector('.vendor-link-btn');
@@ -681,8 +711,16 @@ a{color:#1d4ed8}
   });
 }
 
-/* initial state */
-setUiForHasMonth(false);
+/* initial state
+   Some browsers restore the <input type="month"> value on reload/reopen
+   without firing a "change" event, which used to leave the UI stuck on
+   the empty state until the user manually touched the field. Explicitly
+   run the same logic on load if a value is already present. */
+if (monthPicker.value) {
+  handleMonthChange();
+} else {
+  setUiForHasMonth(false);
+}
 </script>
 </body>
 </html>
